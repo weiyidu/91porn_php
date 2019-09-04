@@ -1,6 +1,7 @@
 <?php 
 require 'vendor/autoload.php';
 require 'Aria2.php';
+require 'config.php';
 use DiDom\Document;
 use DiDom\Query;
 
@@ -19,15 +20,21 @@ function singlePage($page_url, $title)
 		return;
 	}
 	
-
 	$html = getHtml($page_url);
 	$page = new Document($html);
 
-	$cipher = $page->first('#vid')->first('script')->text();
-	$videoUrl = decode($cipher);
-    echo $videoUrl."\n";
+	$shareLink = $page->first('#linkForm2 #fm-video_link');
+	if ($shareLink) {
+		$sharePage = new Document(getHtml($shareLink->text()));
+		$videoUrl = $sharePage->first('source')->getAttribute('src');
+	}else{
+		echo "没有分享链接\n";
+		$cipher = $page->first('#vid script')->text();
+		$videoUrl = decode($cipher);
+	}
+  echo $videoUrl."\n";
    	
-   	download($videoUrl, $title);
+ 	download($videoUrl, $title);
 
 }
 
@@ -44,8 +51,9 @@ function getHtml($url) {
 	curl_setopt($ch, CURLOPT_TIMEOUT,300);
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 	curl_setopt($ch, CURLOPT_HTTPHEADER, $header);
-	// curl_setopt($ch, CURLOPT_PROXY, 'http://127.0.0.1:1087');	//代理地址
-	// curl_setopt($ch, CURLOPT_PROXY, 'socks5://127.0.0.1:1086');	//代理地址
+	if (property_exists('Config', 'proxy') && (Config::$url=='91porn.com')) {
+		curl_setopt($ch, CURLOPT_PROXY, Config::$proxy);
+	}
 
 	$data = curl_exec($ch);
 	curl_close($ch);
@@ -54,7 +62,7 @@ function getHtml($url) {
 
 function decode($cipher)
 {
-	$js = file_get_contents('http://91porn.com/js/md5.js');
+	$js = file_get_contents('http://'.Config::$url.'/js/md5.js');
 	$file = fopen('./md5.js',"w+");
 	fputs($file,$js.'console.log(strencode(process.argv[2], process.argv[3], process.argv[4]));');//写入文件
 	fclose($file);
@@ -71,7 +79,7 @@ function download($videoUrl, $title) {
 	$aria2 = new Aria2('http://127.0.0.1:6800/jsonrpc');
    	$result = $aria2->addUri(
 		[$videoUrl],
-		['dir'=>__DIR__.'/videos', 'out'=>$title.'.mp4']
+		['dir'=>Config::$path, 'out'=>$title.'.mp4']
 	);
 	if ($result['result']) {
 		echo "\033[0;32m"."提交Aria2成功!"."\033[0m\n";
